@@ -1,0 +1,255 @@
+#include "dget.nvgt"
+#include "speech.nvgt"
+const bool isWin=(OS==OS_WINDOWS_NT), isMac=(OS==OS_DARWIN), isLin=(OS==OS_LINUX);
+const string repo_url="https://api.github.com/repos/samtupy/nvgt", releases_url=repo_url+"/releases", commits_url=repo_url+"/commits", release_commit_url=repo_url+"/git/ref/tags/";
+const string commit_hash=NVGT_VERSION_COMMIT_HASH.lower();
+dictionary@[] button;
+int release=0;
+
+void main() {
+	show_window("NVGT Get");
+	const string page=webget(releases_url, "getting releases");
+	json_array@ j=jsonify(page);
+	if (j.length()>1) {
+		dictionary@[] relpick;
+		for(uint i=0; i<j.length(); ++i) {
+			json_object@jobj=j[i];
+			add_button(string(jobj["name"]), ""+i, relpick);
+		}
+		add_button("~Exit", "-1", relpick);
+		release=message_box("Release branch", "pick the release branch", get_button_names(relpick), MESSAGE_BOX_BUTTONS_LEFT_TO_RIGHT);
+		--release;
+	}
+	if (release>=j.length()) {
+		exit();
+	}
+	json_object@ rel=j[release];
+	j=rel["assets"];
+	const string name=rel["name"]+(rel["prerelease"]==true?" (prerelease)":rel["draft"]==true?" (draft)":""), body=rel["body"];
+	const string tag=rel["tag_name"];
+	json_object@ tagO=jsonify(webget(release_commit_url+tag, "getting release commit hash", webget_noExit));
+	tagO=tagO["object"];
+	const string release_commit_hash=string(tagO["sha"]).lower();
+	if (release_commit_hash==commit_hash) {
+		alert_("Up to date", "Your NVGT version is up to date.");
+	}
+	
+	for(uint i=0; i<j.length(); ++i) {
+		rel=j[i];
+		string created_at_str=rel["created_at"];
+		string name=rel["name"];
+		const string extension=(name.ends_with(".apk")?"apk":name.ends_with(".dmg")?"dmg":name.ends_with(".exe")?"exe":name.ends_with(".tar.gz")?"tar.gz":"");
+		add_button("Download "+extension+" '"+name+"'. "+get_human_time(created_at_str)+". "+convert_size(rel["size"])+". "+(rel["download_count"]==0?"no":string(rel["download_count"]))+(rel["download_count"]!=1?" downloads.":" download."), string(rel["browser_download_url"]));
+	}
+	add_button("View release notes", "viewnotes");
+	add_button("View commits", "viewcommits");
+	add_button("~I refuse", "exit");
+	timestamp ts_build(NVGT_VERSION_BUILD_TIMESTAMP*pow(1000, 2));
+	const string version_buildtime=ts_build.format(DATE_TIME_FORMAT_ISO8601, TIMEZONE_OFFSET);
+	int b;
+	string[]@ data, names;
+	while(true) {
+		wait(1);
+		b=message_box("Current NVGT version: "+NVGT_VERSION+" ("+NVGT_VERSION_TYPE+"), built "+get_human_time(version_buildtime)+". New NVGT version: "+name, body.replace("#", "").replace("\\n", "\n"), get_button_names(), MESSAGE_BOX_BUTTONS_LEFT_TO_RIGHT);
+		--b;
+		@data=get_button_data();
+		if (b<0 or b>=button.length() or data[b]=="exit") {
+			exit();
+		}
+		if (data[b]=="viewnotes") {
+			info_box("Release Notes", "Notes", body);
+			continue;
+		}
+		else if (data[b]=="viewcommits") {
+			@j=jsonify(webget(commits_url, "getting commits", webget_noExit));
+			string commits;
+			for(uint i=0; i<j.length(); ++i) {
+				json_object@ com=j[i];
+				commits+=(string(com["sha"]).lower()==commit_hash?"-current- ":"");
+				com=com["commit"];
+				json_object@ author=com["author"];
+				commits+="- "+author["name"]+": ";
+				commits+=com["message"]+" . "+get_human_time(author["date"]);
+				commits+="\r\n\r\n";
+			}
+			if (commits=="") {
+				alert_("Error", "No commits found", 16);
+				continue;
+			}
+			info_box("Commits", "commits", commits);
+			continue;
+		}
+		if (b>=0) {
+			break;
+		}
+	}
+	@names=get_button_names();
+	const string path=save_file_dialog("All files (*.*):*", names[b].split("'")[1].split("'")[0]);
+	if (path=="") {
+		exit();
+	}
+	http h;
+	h.get(data[b]);
+	int prog, oldprog=prog;
+	while(not h.complete) {
+		prog=round(h.progress*100, 0);
+		if (prog!=oldprog) {
+			speak(""+prog+"%", false);
+			oldprog=prog;
+		}
+		wait(1000);
+	}
+	if (h.status_code!=200) {
+		alert_("Error", ""+h.status_code, 16);
+		exit();
+	}
+	const string filedata=h.response_body;
+	file f;
+	f.open(path, "wb");
+	f.write(filedata);
+	f.close();
+	if (question_("Done!", "Downloaded! Open download folder in explorer?")==1) {
+		run("c:/windows/explorer.exe", "/select,\""+path+"\"", false, false);
+	}
+	else {
+		if (question_("Done!", "Install?")==1) {
+			run(path, "/silent", false, false);
+		}
+	}
+}
+
+string get_time_relative(const timespan dt) {
+	const int[]@ unit={dt.days, dt.hours, dt.minutes, dt.seconds};
+	const string[]@ unitname={"day", "hour", "minute", "second"};
+	string relative="";
+	for(uint u=0; u<unit.length(); ++u) {
+		if (unit[u]<1) {
+			continue;
+		}
+		if (relative=="" and unit[u]==1) {
+			relative+=(unitname[u]=="hour"?"an":"a")+" "+unitname[u]+", ";
+			continue;
+		}
+		relative+=unit[u]+" "+unitname[u]+(unit[u]!=1?"s":"")+", ";
+	}
+	relative=relative.slice(0, relative.length()-2);
+	relative+=" ago";
+	return relative;
+}
+void add_button(const string &in name, const string &in data="", dictionary@[]@ b=button) {
+	b.insert_last({{name, data}});
+}
+string[]@ get_button_names(const dictionary@[]@ b=button) {
+	string[] arr;
+	foreach(dictionary@ d : b) {
+		arr.extend(d.get_keys());
+	}
+	return arr;
+}
+string[]@ get_button_data(const dictionary@[]@ b=button) {
+	string[] arr;
+	foreach(dictionary@ d : b) {
+		foreach(dictionaryValue data, dictionaryValue name : d) {
+			arr.insert_last(string(data));
+		}
+	}
+	return arr;
+}
+
+timespan get_span(const string &in str, const string &in format=DATE_TIME_FORMAT_ISO8601, datetime &out dt_dt=void, datetime &out dt_now=void, int &out dt_timezone=void) {
+	int timezone;
+	datetime dt=parse_datetime(format, str, timezone);
+	dt_timezone=timezone;
+	dt_dt=dt;
+	datetime now;
+	dt_now=now;
+	return now-dt;
+}
+string get_human_time(const string &in str, const string &in format=DATE_TIME_FORMAT_ISO8601) {
+	datetime dt, now;
+	int timezone;
+	timespan diff=get_span(str, format, dt, now, timezone);
+	if (dt.day==now.day and abs(diff.total_minutes)<=60) {
+		return get_time_relative(diff);
+	}
+	const string pre=(dt.day==now.day-1?"Yesterday":"");
+	return dt.format((dt.month!=now.month or dt.year!=now.year  or now.day-dt.day>1?"%W, %B %e"+(dt.year!=now.year?" %Y":""):pre)+" @%h:%M %A", timezone);
+}
+enum webget_flags {webget_default=0, webget_noExit=1<<0}
+string webget(const string &in url, const string &in msg="", const webget_flags flags=webget_default) {
+	http h;
+	h.get(url);
+	if (msg!="") {
+		speak(msg);
+	}
+	while(not h.complete) {
+		wait(1);
+	}
+	if (h.status_code!=200) {
+		alert_("error", "http error "+h.status_code, 16);
+		if (flags&webget_noExit!=webget_noExit) {
+			exit();
+		}
+		return "";
+	}
+	return h.response_body;
+}
+var@ jsonify(const string &in input) {
+	json_array@ jarr;
+	string err;
+	try {
+		@jarr=parse_json(input);
+	}
+	catch {
+		err+="%0. in %1, line %2. input: %3".format(get_exception_info(), get_exception_function(), get_exception_line(), input)+"\r\n";
+	}
+	if (@jarr !is null) {
+		return jarr;
+	}
+	json_object@ jo;
+	try {
+		@jo=parse_json(input);
+	}
+	catch {
+		alert_("Error", err+"%0. in %1, line %2. input: %3".format(get_exception_info(), get_exception_function(), get_exception_line(), input), 16);
+		exit();
+	}
+	return jo;
+}
+
+void alert_(const string &title, const string &message, const int flags=64) {
+	if (not isWin) {
+		alert(title, message);
+		return;
+	}
+	library dll;
+	dll.load("user32");
+	dll.call("int MessageBoxA(int, ptr, ptr, int)", 0, message, title, flags);
+	dll.unload();
+}
+
+int question_(const string &title, const string &message, const int flags=4|32) {
+	if (not isWin)
+		return question(title, message);
+	library dll;
+	dll.load("user32");
+	dictionary@d=dll.call("int MessageBoxA(int, ptr, ptr, int)", 0, message, title, flags);
+	dll.unload();
+	const int o=dgetn(d, "0");
+	return (o==1 or o==6?1:o==2 or o==7?2:o);
+}
+string convert_size(const uint64 bytes) {
+	if (bytes<1024) {
+		return bytes+" B";
+	}
+	const string[]@ unit={"KiB", "MiB", "GiB", "TiB"};
+	double tmp=bytes;
+	uint i;
+	for(i=0; i<unit.length(); ++i) {
+		tmp/=1024.0;
+		if (tmp<1024) {
+			break;
+		}
+	}
+	return round(tmp, 1)+" "+unit[i];
+}
