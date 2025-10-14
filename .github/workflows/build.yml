@@ -20,16 +20,13 @@ jobs:
         run: |
           curl -L -o nvgt_installer.exe https://github.com/samtupy/nvgt/releases/download/latest/nvgt_0.90.0_dev.exe
 
-      - name: Install 7zip
-        run: choco install 7zip -y
-
-      - name: Extract NVGT
+      - name: Install NVGT
         run: |
-          7z x nvgt_installer.exe -o./nvgt -y
+          Start-Process -FilePath "nvgt_installer.exe" -ArgumentList "/silent" -Wait
 
       - name: Compile GetNVGT
         run: |
-          ./nvgt/nvgt.exe -c -q get.nvgt
+          nvgt -c -q get.nvgt
         continue-on-error: false
 
       - name: Upload Windows executable
@@ -59,13 +56,12 @@ jobs:
         run: |
           wget -q https://github.com/samtupy/nvgt/releases/download/latest/nvgt_0.90.0_dev.tar.gz
           tar -xzf nvgt_0.90.0_dev.tar.gz
-
-      - name: Make NVGT executable
-        run: chmod +x ./nvgt
+          sudo mv nvgt /usr/local/bin/
+          sudo chmod +x /usr/local/bin/nvgt
 
       - name: Compile GetNVGT
         run: |
-          ./nvgt -c -q get.nvgt
+          nvgt -c -q get.nvgt
         continue-on-error: false
 
       - name: Upload Linux executable
@@ -91,22 +87,17 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Download NVGT for macOS
+      - name: Download and Install NVGT for macOS
         run: |
           wget -q https://github.com/samtupy/nvgt/releases/download/latest/nvgt_0.90.0_dev.dmg
-
-      - name: Mount DMG and extract NVGT
-        run: |
           hdiutil attach nvgt_0.90.0_dev.dmg
-          cp -R /Volumes/NVGT/nvgt.app ./nvgt.app || cp -R /Volumes/*/nvgt.app ./nvgt.app
+          sudo cp -R /Volumes/NVGT/nvgt.app /Applications/ || sudo cp -R /Volumes/*/nvgt.app /Applications/
           hdiutil detach /Volumes/NVGT || hdiutil detach /Volumes/nvgt* || true
-
-      - name: Make NVGT executable
-        run: chmod +x ./nvgt.app/Contents/MacOS/nvgt
+          sudo ln -s /Applications/nvgt.app/Contents/MacOS/nvgt /usr/local/bin/nvgt
 
       - name: Compile GetNVGT
         run: |
-          ./nvgt.app/Contents/MacOS/nvgt -c -q get.nvgt
+          nvgt -c -q get.nvgt
         continue-on-error: false
 
       - name: Upload macOS executable
