@@ -65,6 +65,13 @@ jobs:
           $HOME/nvgt -c -q get.nvgt
         continue-on-error: false
 
+      - name: Debug - List files
+        run: |
+          echo "Files in current directory:"
+          ls -lah
+          echo "Searching for GetNVGT files:"
+          find . -name "GetNVGT*" -o -name "get*" 2>/dev/null || true
+
       - name: Upload Linux executable
         uses: actions/upload-artifact@v4
         with:
