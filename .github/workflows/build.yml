@@ -23,10 +23,11 @@ jobs:
       - name: Install NVGT
         run: |
           Start-Process -FilePath "nvgt_installer.exe" -ArgumentList "/silent" -Wait
+          $env:PATH += ";C:\nvgt"
 
       - name: Compile GetNVGT
         run: |
-          nvgt -c -q get.nvgt
+          C:\nvgt\nvgt.exe -c -q get.nvgt
         continue-on-error: false
 
       - name: Upload Windows executable
@@ -52,16 +53,16 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Download NVGT for Linux
+      - name: Download and Setup NVGT for Linux
         run: |
           wget -q https://github.com/samtupy/nvgt/releases/download/latest/nvgt_0.90.0_dev.tar.gz
-          tar -xzf nvgt_0.90.0_dev.tar.gz
-          sudo mv nvgt /usr/local/bin/
-          sudo chmod +x /usr/local/bin/nvgt
+          tar -xzf nvgt_0.90.0_dev.tar.gz -C $HOME
+          chmod +x $HOME/nvgt
 
       - name: Compile GetNVGT
         run: |
-          nvgt -c -q get.nvgt
+          export LD_LIBRARY_PATH=$HOME/lib:$LD_LIBRARY_PATH
+          $HOME/nvgt -c -q get.nvgt
         continue-on-error: false
 
       - name: Upload Linux executable
@@ -93,11 +94,10 @@ jobs:
           hdiutil attach nvgt_0.90.0_dev.dmg
           sudo cp -R /Volumes/NVGT/nvgt.app /Applications/ || sudo cp -R /Volumes/*/nvgt.app /Applications/
           hdiutil detach /Volumes/NVGT || hdiutil detach /Volumes/nvgt* || true
-          sudo ln -s /Applications/nvgt.app/Contents/MacOS/nvgt /usr/local/bin/nvgt
 
       - name: Compile GetNVGT
         run: |
-          nvgt -c -q get.nvgt
+          /Applications/nvgt.app/Contents/MacOS/nvgt -c -q get.nvgt
         continue-on-error: false
 
       - name: Upload macOS executable
