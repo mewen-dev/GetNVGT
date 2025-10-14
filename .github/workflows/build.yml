@@ -65,18 +65,11 @@ jobs:
           $HOME/nvgt -c -q get.nvgt
         continue-on-error: false
 
-      - name: Debug - List files
-        run: |
-          echo "Files in current directory:"
-          ls -lah
-          echo "Searching for GetNVGT files:"
-          find . -name "GetNVGT*" -o -name "get*" 2>/dev/null || true
-
       - name: Upload Linux executable
         uses: actions/upload-artifact@v4
         with:
           name: GetNVGT-linux
-          path: GetNVGT.tar.gz
+          path: GetNVGT.zip
 
       - name: Upload to release
         if: github.event_name == 'release'
@@ -85,9 +78,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ github.event.release.upload_url }}
-          asset_path: ./GetNVGT.tar.gz
-          asset_name: GetNVGT-linux.tar.gz
-          asset_content_type: application/gzip
+          asset_path: ./GetNVGT.zip
+          asset_name: GetNVGT-linux.zip
+          asset_content_type: application/zip
 
   build-macos:
     runs-on: macos-14
