@@ -1,0 +1,127 @@
+name: Build NVGT Program
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  release:
+    types: [created]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download NVGT for Windows
+        run: |
+          curl -L -o nvgt_installer.exe https://github.com/samtupy/nvgt/releases/download/latest/nvgt_0.90.0_dev.exe
+
+      - name: Install 7zip
+        run: choco install 7zip -y
+
+      - name: Extract NVGT
+        run: |
+          7z x nvgt_installer.exe -o./nvgt -y
+
+      - name: Compile GetNVGT
+        run: |
+          ./nvgt/nvgt.exe -c -q get.nvgt
+        continue-on-error: false
+
+      - name: Upload Windows executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: GetNVGT-windows
+          path: GetNVGT.zip
+
+      - name: Upload to release
+        if: github.event_name == 'release'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./GetNVGT.zip
+          asset_name: GetNVGT-windows.zip
+          asset_content_type: application/zip
+
+  build-linux:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download NVGT for Linux
+        run: |
+          wget -q https://github.com/samtupy/nvgt/releases/download/latest/nvgt_0.90.0_dev.tar.gz
+          tar -xzf nvgt_0.90.0_dev.tar.gz
+
+      - name: Make NVGT executable
+        run: chmod +x ./nvgt
+
+      - name: Compile GetNVGT
+        run: |
+          ./nvgt -c -q get.nvgt
+        continue-on-error: false
+
+      - name: Upload Linux executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: GetNVGT-linux
+          path: GetNVGT.tar.gz
+
+      - name: Upload to release
+        if: github.event_name == 'release'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./GetNVGT.tar.gz
+          asset_name: GetNVGT-linux.tar.gz
+          asset_content_type: application/gzip
+
+  build-macos:
+    runs-on: macos-14
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download NVGT for macOS
+        run: |
+          wget -q https://github.com/samtupy/nvgt/releases/download/latest/nvgt_0.90.0_dev.dmg
+
+      - name: Mount DMG and extract NVGT
+        run: |
+          hdiutil attach nvgt_0.90.0_dev.dmg
+          cp -R /Volumes/NVGT/nvgt.app ./nvgt.app || cp -R /Volumes/*/nvgt.app ./nvgt.app
+          hdiutil detach /Volumes/NVGT || hdiutil detach /Volumes/nvgt* || true
+
+      - name: Make NVGT executable
+        run: chmod +x ./nvgt.app/Contents/MacOS/nvgt
+
+      - name: Compile GetNVGT
+        run: |
+          ./nvgt.app/Contents/MacOS/nvgt -c -q get.nvgt
+        continue-on-error: false
+
+      - name: Upload macOS executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: GetNVGT-macos
+          path: GetNVGT.dmg
+
+      - name: Upload to release
+        if: github.event_name == 'release'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./GetNVGT.dmg
+          asset_name: GetNVGT-macos.dmg
+          asset_content_type: application/x-apple-diskimage
