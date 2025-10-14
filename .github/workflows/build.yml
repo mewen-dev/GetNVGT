@@ -93,6 +93,17 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Delete existing latest release
+        run: |
+          gh release delete latest --yes || echo "No existing release to delete"
+          git push origin :refs/tags/latest || echo "No existing tag to delete"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -104,7 +115,7 @@ jobs:
           mv artifacts/GetNVGT-linux/GetNVGT.zip GetNVGT-linux.zip
           mv artifacts/GetNVGT-macos/GetNVGT.dmg GetNVGT-macos.dmg
 
-      - name: Create or Update Latest Release
+      - name: Create Latest Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
