@@ -9,6 +9,9 @@ on:
     types: [created]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build-windows:
     runs-on: windows-latest
@@ -30,22 +33,17 @@ jobs:
           C:\nvgt\nvgt.exe -c -q get.nvgt
         continue-on-error: false
 
+      - name: Extract inner zip (fix double-zip)
+        run: |
+          Expand-Archive -Path GetNVGT.zip -DestinationPath temp -Force
+          Remove-Item GetNVGT.zip
+          Compress-Archive -Path temp\* -DestinationPath GetNVGT-windows.zip
+
       - name: Upload Windows executable
         uses: actions/upload-artifact@v4
         with:
           name: GetNVGT-windows
-          path: GetNVGT.zip
-
-      - name: Upload to release
-        if: github.event_name == 'release'
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: ./GetNVGT.zip
-          asset_name: GetNVGT-windows.zip
-          asset_content_type: application/zip
+          path: GetNVGT-windows.zip
 
   build-linux:
     runs-on: ubuntu-22.04
@@ -65,22 +63,17 @@ jobs:
           $HOME/nvgt -c -q get.nvgt
         continue-on-error: false
 
+      - name: Extract inner zip (fix double-zip)
+        run: |
+          unzip -q GetNVGT.zip -d temp
+          rm GetNVGT.zip
+          cd temp && zip -r ../GetNVGT-linux.zip * && cd ..
+
       - name: Upload Linux executable
         uses: actions/upload-artifact@v4
         with:
           name: GetNVGT-linux
-          path: GetNVGT.zip
-
-      - name: Upload to release
-        if: github.event_name == 'release'
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: ./GetNVGT.zip
-          asset_name: GetNVGT-linux.zip
-          asset_content_type: application/zip
+          path: GetNVGT-linux.zip
 
   build-macos:
     runs-on: macos-14
@@ -100,19 +93,44 @@ jobs:
           /Applications/nvgt.app/Contents/MacOS/nvgt -c -q get.nvgt
         continue-on-error: false
 
+      - name: Rename macOS artifact
+        run: |
+          mv GetNVGT.dmg GetNVGT-macos.dmg
+
       - name: Upload macOS executable
         uses: actions/upload-artifact@v4
         with:
           name: GetNVGT-macos
-          path: GetNVGT.dmg
+          path: GetNVGT-macos.dmg
 
-      - name: Upload to release
-        if: github.event_name == 'release'
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  release:
+    name: Create Latest Release
+    needs: [build-windows, build-linux, build-macos]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
         with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: ./GetNVGT.dmg
-          asset_name: GetNVGT-macos.dmg
-          asset_content_type: application/x-apple-diskimage
+          path: artifacts
+
+      - name: Create or Update Latest Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: Latest Development Build
+          body: |
+            Automated build from the latest commit on main branch.
+
+            **Commit:** ${{ github.sha }}
+            **Date:** ${{ github.event.head_commit.timestamp }}
+
+            Download the appropriate version for your platform:
+            - **Windows:** GetNVGT-windows.zip
+            - **Linux:** GetNVGT-linux.zip
+            - **macOS:** GetNVGT-macos.dmg
+          prerelease: true
+          files: |
+            artifacts/GetNVGT-windows/GetNVGT-windows.zip
+            artifacts/GetNVGT-linux/GetNVGT-linux.zip
+            artifacts/GetNVGT-macos/GetNVGT-macos.dmg
