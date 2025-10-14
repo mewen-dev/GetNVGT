@@ -33,15 +33,11 @@ jobs:
           C:\nvgt\nvgt.exe -c -q get.nvgt
         continue-on-error: false
 
-      - name: Extract contents (avoid double-zip)
-        run: |
-          Expand-Archive -Path GetNVGT.zip -DestinationPath GetNVGT-windows -Force
-
       - name: Upload Windows executable
         uses: actions/upload-artifact@v4
         with:
           name: GetNVGT-windows
-          path: GetNVGT-windows/
+          path: GetNVGT.zip
 
   build-linux:
     runs-on: ubuntu-22.04
@@ -61,15 +57,11 @@ jobs:
           $HOME/nvgt -c -q get.nvgt
         continue-on-error: false
 
-      - name: Extract contents (avoid double-zip)
-        run: |
-          unzip -q GetNVGT.zip -d GetNVGT-linux
-
       - name: Upload Linux executable
         uses: actions/upload-artifact@v4
         with:
           name: GetNVGT-linux
-          path: GetNVGT-linux/
+          path: GetNVGT.zip
 
   build-macos:
     runs-on: macos-14
@@ -89,18 +81,11 @@ jobs:
           /Applications/nvgt.app/Contents/MacOS/nvgt -c -q get.nvgt
         continue-on-error: false
 
-      - name: Extract DMG contents (avoid nested packaging)
-        run: |
-          hdiutil attach GetNVGT.dmg -mountpoint /Volumes/GetNVGT
-          mkdir GetNVGT-macos
-          cp -R /Volumes/GetNVGT/* GetNVGT-macos/
-          hdiutil detach /Volumes/GetNVGT
-
       - name: Upload macOS executable
         uses: actions/upload-artifact@v4
         with:
           name: GetNVGT-macos
-          path: GetNVGT-macos/
+          path: GetNVGT.dmg
 
   release:
     name: Create Latest Release
@@ -113,11 +98,11 @@ jobs:
         with:
           path: artifacts
 
-      - name: Package artifacts for release
+      - name: Rename artifacts for release
         run: |
-          cd artifacts/GetNVGT-windows && zip -r ../../GetNVGT-windows.zip * && cd ../..
-          cd artifacts/GetNVGT-linux && zip -r ../../GetNVGT-linux.zip * && cd ../..
-          cd artifacts/GetNVGT-macos && zip -r ../../GetNVGT-macos.zip * && cd ../..
+          mv artifacts/GetNVGT-windows/GetNVGT.zip GetNVGT-windows.zip
+          mv artifacts/GetNVGT-linux/GetNVGT.zip GetNVGT-linux.zip
+          mv artifacts/GetNVGT-macos/GetNVGT.dmg GetNVGT-macos.dmg
 
       - name: Create or Update Latest Release
         uses: softprops/action-gh-release@v2
@@ -133,9 +118,9 @@ jobs:
             Download the appropriate version for your platform:
             - **Windows:** GetNVGT-windows.zip
             - **Linux:** GetNVGT-linux.zip
-            - **macOS:** GetNVGT-macos.zip
+            - **macOS:** GetNVGT-macos.dmg
           prerelease: true
           files: |
             GetNVGT-windows.zip
             GetNVGT-linux.zip
-            GetNVGT-macos.zip
+            GetNVGT-macos.dmg
