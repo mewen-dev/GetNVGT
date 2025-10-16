@@ -50,7 +50,7 @@ void main() {
 	string[]@ data, names;
 	while(true) {
 		wait(1);
-		b=message_box("Current NVGT version: "+NVGT_VERSION+" ("+NVGT_VERSION_TYPE+"), built "+get_human_time(version_buildtime)+". New NVGT version: "+name, body.replace("#", "").replace("\\n", "\n"), get_button_names(), MESSAGE_BOX_BUTTONS_LEFT_TO_RIGHT);
+		b=message_box((SCRIPT_COMPILED?"":"Current NVGT version: "+NVGT_VERSION+" ("+NVGT_VERSION_TYPE+"), built "+get_human_time(version_buildtime)+". ")+"New NVGT version: "+name, body.replace("#", "").replace("\\n", "\n"), get_button_names(), MESSAGE_BOX_BUTTONS_LEFT_TO_RIGHT);
 		--b;
 		@data=get_button_data();
 		if (b<0 or b>=button.length() or data[b]=="exit") {
