@@ -1,3 +1,3 @@
-# Get NVGT
+# About Get NVGT
 
-Check and download [NVGT](https://nvgt.gg) releases on GitHub.
+Lets you check and download [NVGT](https://nvgt.dev) releases on/from GitHub, as well as view commits.
