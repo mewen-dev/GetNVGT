@@ -233,9 +233,9 @@ int question_(const string &title, const string &message, const int flags=4|32) 
 		return question(title, message);
 	library dll;
 	dll.load("user32");
-	dictionary@d=dll.call("int MessageBoxA(int, ptr, ptr, int)", 0, message, title, flags);
+	var@d=dll.call("int MessageBoxA(int, ptr, ptr, int)", 0, message, title, flags);
 	dll.unload();
-	const int o=dgetn(d, "0");
+	const int o=d;
 	return (o==1 or o==6?1:o==2 or o==7?2:o);
 }
 string convert_size(const uint64 bytes) {
