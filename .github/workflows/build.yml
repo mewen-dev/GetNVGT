@@ -26,18 +26,31 @@ jobs:
       - name: Install NVGT
         run: |
           Start-Process -FilePath "nvgt_installer.exe" -ArgumentList "/silent" -Wait
-          $env:PATH += ";C:\nvgt"
+          # NOTE: this assumes the silent installer drops nvgt.exe at C:\nvgt.
+          # Verify this is actually true for the installer you're using -
+          # some installers default elsewhere (e.g. Program Files).
+          if (!(Test-Path "C:\nvgt\nvgt.exe")) {
+            Write-Error "nvgt.exe not found at C:\nvgt after install - check the installer's real install path"
+            exit 1
+          }
 
       - name: Compile GetNVGT
         run: |
           C:\nvgt\nvgt.exe -c -q get.nvgt
-        continue-on-error: false
+
+      - name: Verify package before upload
+        run: |
+          if (!(Test-Path "GetNVGT.zip")) {
+            Write-Error "GetNVGT.zip was not created - aborting before upload"
+            exit 1
+          }
 
       - name: Upload Windows executable
         uses: actions/upload-artifact@v4
         with:
           name: GetNVGT-windows
           path: GetNVGT.zip
+          if-no-files-found: error
 
   build-linux:
     runs-on: ubuntu-22.04
@@ -48,20 +61,33 @@ jobs:
       - name: Download and Setup NVGT for Linux
         run: |
           wget -q https://github.com/samtupy/nvgt/releases/download/latest/nvgt_0.90.0_dev.tar.gz
-          tar -xzf nvgt_0.90.0_dev.tar.gz -C $HOME
-          chmod +x $HOME/nvgt
+          tar -xzf nvgt_0.90.0_dev.tar.gz -C "$HOME"
+          # NOTE: this assumes the tarball extracts an executable directly to
+          # $HOME/nvgt rather than into a subfolder. Verify with `tar -tzf` if unsure.
+          if [ ! -f "$HOME/nvgt" ]; then
+            echo "::error::nvgt binary not found at \$HOME/nvgt after extracting - check archive layout"
+            exit 1
+          fi
+          chmod +x "$HOME/nvgt"
 
       - name: Compile GetNVGT
         run: |
-          export LD_LIBRARY_PATH=$HOME/lib:$LD_LIBRARY_PATH
-          $HOME/nvgt -c -q get.nvgt
-        continue-on-error: false
+          export LD_LIBRARY_PATH="$HOME/lib:$LD_LIBRARY_PATH"
+          "$HOME/nvgt" -c -q get.nvgt
+
+      - name: Verify package before upload
+        run: |
+          if [ ! -f "GetNVGT.zip" ]; then
+            echo "::error::GetNVGT.zip was not created - aborting before upload"
+            exit 1
+          fi
 
       - name: Upload Linux executable
         uses: actions/upload-artifact@v4
         with:
           name: GetNVGT-linux
           path: GetNVGT.zip
+          if-no-files-found: error
 
   build-macos:
     runs-on: macos-14
@@ -72,26 +98,37 @@ jobs:
       - name: Download and Install NVGT for macOS
         run: |
           wget -q https://github.com/samtupy/nvgt/releases/download/latest/nvgt_0.90.0_dev.dmg
-          hdiutil attach nvgt_0.90.0_dev.dmg
-          sudo cp -R /Volumes/NVGT/nvgt.app /Applications/ || sudo cp -R /Volumes/*/nvgt.app /Applications/
-          hdiutil detach /Volumes/NVGT || hdiutil detach /Volumes/nvgt* || true
+          MOUNT_DIR=$(hdiutil attach nvgt_0.90.0_dev.dmg | tail -1 | awk -F'\t' '{print $NF}' | sed 's/[[:space:]]*$//')
+          if [ -z "$MOUNT_DIR" ] || [ ! -d "$MOUNT_DIR/nvgt.app" ]; then
+            echo "::error::Could not locate nvgt.app on mounted volume ($MOUNT_DIR)"
+            exit 1
+          fi
+          sudo cp -R "$MOUNT_DIR/nvgt.app" /Applications/
+          hdiutil detach "$MOUNT_DIR" || true
 
       - name: Compile GetNVGT
         run: |
           /Applications/nvgt.app/Contents/MacOS/nvgt -c -q get.nvgt
-        continue-on-error: false
+
+      - name: Verify package before upload
+        run: |
+          if [ ! -f "GetNVGT.dmg" ]; then
+            echo "::error::GetNVGT.dmg was not created - aborting before upload"
+            exit 1
+          fi
 
       - name: Upload macOS executable
         uses: actions/upload-artifact@v4
         with:
           name: GetNVGT-macos
           path: GetNVGT.dmg
+          if-no-files-found: error
 
   release:
     name: Create Latest Release
     needs: [build-windows, build-linux, build-macos]
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' || github.event_name == 'release' || github.event_name == 'workflow_dispatch'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -108,6 +145,15 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
+
+      - name: Verify downloaded artifacts before rename
+        run: |
+          for f in artifacts/GetNVGT-windows/GetNVGT.zip artifacts/GetNVGT-linux/GetNVGT.zip artifacts/GetNVGT-macos/GetNVGT.dmg; do
+            if [ ! -f "$f" ]; then
+              echo "::error::Missing expected artifact: $f"
+              exit 1
+            fi
+          done
 
       - name: Rename artifacts for release
         run: |
