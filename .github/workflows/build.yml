@@ -128,7 +128,14 @@ jobs:
     name: Create Latest Release
     needs: [build-windows, build-linux, build-macos]
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' || github.event_name == 'release' || github.event_name == 'workflow_dispatch'
+    # Linux is optional right now (compiler issue) - only require windows/macos.
+    # `always()` overrides the default "all needs must succeed" behavior, so we
+    # gate manually below instead.
+    if: |
+      always() &&
+      needs.build-windows.result == 'success' &&
+      needs.build-macos.result == 'success' &&
+      (github.event_name == 'push' || github.event_name == 'release' || github.event_name == 'workflow_dispatch')
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -148,18 +155,24 @@ jobs:
 
       - name: Verify downloaded artifacts before rename
         run: |
-          for f in artifacts/GetNVGT-windows/GetNVGT.zip artifacts/GetNVGT-linux/GetNVGT.zip artifacts/GetNVGT-macos/GetNVGT.dmg; do
+          # Windows and macOS are required; Linux is optional for now.
+          for f in artifacts/GetNVGT-windows/GetNVGT.zip artifacts/GetNVGT-macos/GetNVGT.dmg; do
             if [ ! -f "$f" ]; then
               echo "::error::Missing expected artifact: $f"
               exit 1
             fi
           done
+          if [ ! -f "artifacts/GetNVGT-linux/GetNVGT.zip" ]; then
+            echo "::warning::Linux artifact missing - releasing without it"
+          fi
 
       - name: Rename artifacts for release
         run: |
           mv artifacts/GetNVGT-windows/GetNVGT.zip GetNVGT-windows.zip
-          mv artifacts/GetNVGT-linux/GetNVGT.zip GetNVGT-linux.zip
           mv artifacts/GetNVGT-macos/GetNVGT.dmg GetNVGT-macos.dmg
+          if [ -f "artifacts/GetNVGT-linux/GetNVGT.zip" ]; then
+            mv artifacts/GetNVGT-linux/GetNVGT.zip GetNVGT-linux.zip
+          fi
 
       - name: Create Latest Release
         uses: softprops/action-gh-release@v2
